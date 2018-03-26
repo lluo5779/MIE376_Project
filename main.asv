@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 
 clc
 clear all
@@ -75,12 +74,10 @@ currentRiskFree = table2array( riskFree( ( calEnd - days(7) ) <= dates ...
 periodPrices = table2array( adjClose( calStart <= dates ... 
                                                 & dates <= calEnd, :))'; 
                                             
-% Data Mean
+% Data Moments
 mu_entire_training = geomean(1+periodReturns, 1) - 1;
 mu_last_year = geomean(1+lastYearReturns, 1) - 1;
-                                 
-% Data Variance
-cov_entire_training = cov(periodReturns);
-cov_last_Year = cov(lastYearReturns);
 
+cov_entire_training = cov(periodReturns);
+cov_last_Year = geomean(1+lastYearReturns)
 
