@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 clc
 clear all
 format long
@@ -12,30 +10,26 @@ format long
 % Load the stock weekly prices and factors weekly returns
 adjClose = readtable('Project1_Data_adjClose.csv');
 adjClose.Properties.RowNames = cellstr(datetime(adjClose.Date));
+dates = datetime(adjClose.Date);
 size_adjClose = size(adjClose);
 adjClose = adjClose(:,2:size_adjClose(2));
 
-% Load the factors for Fama French Model and Risk Free rate
-factorRet = readtable('Project1_Data_FF_factors.csv'); 
+factorRet = readtable('Project1_Data_FF_factors.csv'); %, 'ReadRowNames', true);
 factorRet.Properties.RowNames = cellstr(datetime(factorRet.Date));
-size_factorRet = size(factorRet);
-factorRet = factorRet(:,2:size_factorRet(2));
 
-riskFree = factorRet(:,4);
-factorRet = factorRet(:,1:3);
+yearlyReturn = readtable('yearly_ret.xlsx'); %xlsread('Project1_Data_adjClose_yearly_ret','Project1_Data_adjClose_yearly_r');
+yearlyReturn = yearlyReturn(:,2:end);
+yearlyReturn.Properties.RowNames = cellstr(dates((size(dates,1)-size(yearlyReturn,1)+1):end, :))
 
 % Identify the tickers and the dates 
-tickers = adjClose.Properties.VariableNames';
-dates   = datetime(factorRet.Properties.RowNames);
+tickers = yearlyReturn.Properties.VariableNames';
 
 % Calculate the stocks' weekly EXCESS returns
 prices  = table2array(adjClose);
-returns_raw = ( prices(2:end,:) - prices(1:end-1,:) ) ./ prices(1:end-1,:);
-returns = returns_raw - ( diag( table2array(riskFree) ) * ones( size(returns_raw) ) );
+returns = ( prices(2:end,:) - prices(1:end-1,:) ) ./ prices(1:end-1,:);
 returns = array2table(returns);
 returns.Properties.VariableNames = tickers;
 returns.Properties.RowNames = cellstr(datetime(factorRet.Properties.RowNames));
-
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -43,44 +37,50 @@ returns.Properties.RowNames = cellstr(datetime(factorRet.Properties.RowNames));
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Start of in-sample calibration period 
-calStart = datetime('2012-01-01');
-calEnd   = calStart + calmonths(36) - days(1);
+calStart = datetime('2013-01-01');
+calEnd   = calStart + calmonths(12*2) - days(1);
 
 % Start of out-of-sample test period 
 testStart = datetime('2015-01-01');
-testEnd   = testStart + calmonths(6) - days(1);
-       
+testEnd   = testStart + calmonths(12) - days(8);
+
+% Initialize testing returns
+testingReturns = table2array( returns( testStart <= dates & dates <= testEnd, :) );
+
 % Number of investment periods (each investment period is 6 months long)
 NoPeriods = 6;
-
-% Initialize list of Functions
-funNames  = {'optimal Value Srategy' 'Stochastic Programming'}; % WRITE THE NAME OF YOUR FUNCTION
-NoMethods = length(funNames);
-
-funList = {'op_Val_Srategy' '#######'};% WRITE THE NAME OF YOUR FUNCTION
-funList = cellfun(@str2func, funList, 'UniformOutput', false);
-
-% Maximum number of assets used
-card = 12;
 
 % Determine hyperparameters based on adjClose
 [NoTotalDates, NoAssets] = size(adjClose);
 
 % period returns and prices from 2012 Jan to 2014 Dec
-periodReturns = table2array( returns( calStart <= dates & dates <= calEnd, :) );
-lastYearReturns = periodReturns = table2array( returns( calStart+calmonths(24)-days(1) <= dates & dates <= calEnd, :) );
+trainingReturns = table2array( yearlyReturn( calStart <= dates & dates <= calEnd, :) );
+lastYearTrainingReturns = table2array( yearlyReturn( calEnd-calmonths(12)+days(1) <= dates & dates <= calEnd, :) );
 
-currentRiskFree = table2array( riskFree( ( calEnd - days(7) ) <= dates ... 
-                                                & dates <= calEnd, :));
-periodPrices = table2array( adjClose( calStart <= dates ... 
-                                                & dates <= calEnd, :))'; 
-                                            
+% testing returns from 2015 Jan to 2015 Dec
+testingReturns = table2array( yearlyReturn( calStart <= dates & dates <= calEnd, :) );
+
 % Data Mean
-mu_entire_training = geomean(1+periodReturns, 1) - 1;
-mu_last_year = geomean(1+lastYearReturns, 1) - 1;
+mu_entire_training = geomean(1+trainingReturns, 1) - 1;
+mu_last_year = geomean(1+lastYearTrainingReturns, 1) - 1;
                                  
 % Data Variance
-cov_entire_training = cov(periodReturns);
-cov_last_Year = cov(lastYearReturns);
+cov_entire_training = cov(trainingReturns);
+cov_last_Year = cov(lastYearTrainingReturns);
+
+no_scenarios = 3;
+generated_ret = mvnrnd(mu_entire_training, cov_entire_training, no_scenarios);
+
+%% CALL FUNCTION for Weights
+weights = rand([1,20])
+
+%%
+portfRet = weights*testingReturns';
+
+
+
+
+
+
 
 
