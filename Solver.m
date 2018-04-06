@@ -1,20 +1,28 @@
-[weigths, optimal_value] = Solver[f1, f2];
+[x, fval] = Solver(xi, b, G);
 
-f1 = [22 13 9 17 8 23];
+%number of scenarios
+[r, c] = size(xi);
 
-% shortage penalty and surplus penalty
-f2 = [16 19 14 28 21 33]./3;
+%objective function with all y and w at the end with probability 1/r 
+obj = [zeros(1, 20+r*20), repmat([5, -10], 1, r)]./r;
 
-% capacity constraint 
-A = [% initial deterministic variables
-    ones(1,3) zeros(1, 24-3);
-    zeros(1,3) ones(1,3) zeros(1, 24-6)]
+%first constraint
+FC = [ones(1,20), zeros(1,r*23)];
 
-b = [%initial constraint 65 80];
+%second constraint 
+SC = zeros(3, 20+20*r+3*r);
 
-% three scenaros 
-Aeq = [repmat(eye(3),3,2) kron(eye(n),[1, -1])] % n is the number of equality constraint
+for i = 1:r
+    SC(i,1:20) = xi(i,:);
+    SC(i,20*i+1:20+20*i) = ones(1,20);
+end
 
-beq = [%xi vector corresponding to every variables]
+%third constraint
+TC = zeros(3, 20+20*r+3*r);
 
-[x, fval] = linprog([f1 f2 f2 f2], A, b, Aeq, beq, zeros(24,1), [])
+for i = 1:r
+    TC(i,20*i+1:20+20*i) = xi(i,:);
+    TC(i,19+20*r+2*i:19+20*r+2*i+1) = [-1,1];
+end
+
+[x, fval] = linprog(-obj, [], [], [FC;SC;TC], [b; zeros(r,1); repmat(5,[r,1])], zeros(20+23*r,1),[]);
