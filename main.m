@@ -86,13 +86,16 @@ cov_last_Year_yr = cov(lastYearTrainingReturns_yr-1);
 cov_entire_training_mth = cov(trainingReturns_mth);
 cov_last_Year_mth = cov(lastYearTrainingReturns_mth);
 
-no_scenarios = 3;
+no_scenarios = 5;
 generated_ret = mvnrnd(mu_entire_training_mth, cov_entire_training_mth, no_scenarios); % 20 assets = 20 rows; scenarios in columns
 exp_generated_ret = geomean(1+generated_ret,1)-1; % for VSS first term
 
 %% CALL FUNCTION for Weights
-weights = rand([1,20])
-weights_expected_scenarios = rand([1,20]) %VSS first term
+[weights,fval] = Solver(generated_ret, 1000, 10000)
+fval = -1*fval
+weights_expected_scenarios = Solver(exp_generated_ret, 1000, 10000) %VSS first term
+
+% [x, fval] = Solver(xi, b, G);
 
 %% 
 for s = 1:no_scenarios
