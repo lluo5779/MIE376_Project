@@ -19,11 +19,11 @@ factorRet.Properties.RowNames = cellstr(datetime(factorRet.Date));
 
 yearlyReturn = readtable('yearly_ret.xlsx'); %xlsread('Project1_Data_adjClose_yearly_ret','Project1_Data_adjClose_yearly_r');
 yearlyReturn = yearlyReturn(:,2:end);
-yearlyReturn.Properties.RowNames = cellstr(dates((size(dates,1)-size(yearlyReturn,1)+1):end, :))
+yearlyReturn.Properties.RowNames = cellstr(dates((size(dates,1)-size(yearlyReturn,1)+1):end, :));
 
 monthlyReturn = readtable('monthly_ret.xlsx'); %xlsread('Project1_Data_adjClose_yearly_ret','Project1_Data_adjClose_yearly_r');
 %monthlyReturn = monthlyReturn(:,2:end);
-monthlyReturn.Properties.RowNames = cellstr(dates(1:size(monthlyReturn,1), :))
+monthlyReturn.Properties.RowNames = cellstr(dates(1:size(monthlyReturn,1), :));
 
 % Identify the tickers and the dates 
 tickers = yearlyReturn.Properties.VariableNames';
@@ -86,24 +86,33 @@ cov_last_Year_yr = cov(lastYearTrainingReturns_yr-1);
 cov_entire_training_mth = cov(trainingReturns_mth);
 cov_last_Year_mth = cov(lastYearTrainingReturns_mth);
 
-no_scenarios = 5;
+no_scenarios = 10;
 generated_ret = mvnrnd(mu_entire_training_mth, cov_entire_training_mth, no_scenarios); % 20 assets = 20 rows; scenarios in columns
 exp_generated_ret = geomean(1+generated_ret,1)-1; % for VSS first term
 
 %% CALL FUNCTION for Weights
-[weights,fval] = Solver(generated_ret, 1000, 10000)
-fval = -1*fval
-weights_expected_scenarios = Solver(exp_generated_ret, 1000, 10000) %VSS first term
+[x,fval] = Solver(1+generated_ret, 1000, 1000)
+fval = -1*fval;
+[x_expected_scenarios, fval_expected_scenarios] = Solver(exp_generated_ret, 1000, 1200); %VSS first term
 
-% [x, fval] = Solver(xi, b, G);
+
+for i = 1:no_scenarios
+    weights{i} = zeros(NoAssets,1);
+    weights_exp_scenarios = zeros(NoAssets,1);
+end
+for i = 1:no_scenarios
+    weights{i}(:,1) = x((NoAssets*i+1):NoAssets*(i+1), 1);%[x(1:NoAssets, 1); x((NoAssets*i+1):NoAssets*(i+1), 1)];
+end
+
+weights_exp_scenarios = x((NoAssets+1):NoAssets*2, 1);
 
 %% 
 for s = 1:no_scenarios
-    portfRet(:,1) = weights(s)*testingReturns_weekly';
+    portfRet(:,s) = testingReturns_weekly*weights{s};
 end
 
 expected_portfRet_across_scenarios = mean(portfRet);
-portfRet_avg_scenarios = weights_expected_scenarios*testingReturns_weekly';
+portfRet_avg_scenarios = testingReturns_weekly*weights_expected_scenarios;
 
 portfValue = weights*testingReturns_weekly';
 
