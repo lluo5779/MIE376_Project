@@ -86,7 +86,7 @@ cov_last_Year_yr = cov(lastYearTrainingReturns_yr-1);
 cov_entire_training_mth = cov(trainingReturns_mth);
 cov_last_Year_mth = cov(lastYearTrainingReturns_mth);
 
-no_scenarios = 10;
+no_scenarios = 100000;
 generated_ret = mvnrnd(mu_entire_training_mth, cov_entire_training_mth, no_scenarios); % 20 assets = 20 rows; scenarios in columns
 exp_generated_ret = geomean(1+generated_ret,1)-1; % for VSS first term
 
@@ -95,24 +95,25 @@ exp_generated_ret = geomean(1+generated_ret,1)-1; % for VSS first term
 fval = -1*fval;
 [x_expected_scenarios, fval_expected_scenarios] = Solver(exp_generated_ret, 1000, 1200); %VSS first term
 
+% for i = 1:no_scenarios
+%     weights{i} = zeros(NoAssets,1);
+%     weights_exp_scenarios = zeros(NoAssets,1);
+% end
+% for i = 1:no_scenarios
+weights = x((1:NoAssets), 1);
 
-for i = 1:no_scenarios
-    weights{i} = zeros(NoAssets,1);
-    weights_exp_scenarios = zeros(NoAssets,1);
-end
-for i = 1:no_scenarios
-    weights{i}(:,1) = x((NoAssets*i+1):NoAssets*(i+1), 1);%[x(1:NoAssets, 1); x((NoAssets*i+1):NoAssets*(i+1), 1)];
-end
-
-weights_exp_scenarios = x((NoAssets+1):NoAssets*2, 1);
+weights_exp_scenarios = x((1:NoAssets), 1);
+% 
+% weights_mat = cat(3, weights{:});
+% weights_mean = mean(weights_mat, 3)
 
 %% 
-for s = 1:no_scenarios
-    portfRet(:,s) = testingReturns_weekly*weights{s};
-end
+% for s = 1:no_scenarios
+portfRet = testingReturns_weekly*weights;
+% end
 
 expected_portfRet_across_scenarios = mean(portfRet);
-portfRet_avg_scenarios = testingReturns_weekly*weights_expected_scenarios;
+portfRet_avg_scenarios = testingReturns_weekly*weights_exp_scenarios;
 
 portfValue = weights*testingReturns_weekly';
 
