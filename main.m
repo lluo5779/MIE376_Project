@@ -37,7 +37,7 @@ returns.Properties.VariableNames = tickers;
 returns.Properties.RowNames = cellstr(datetime(factorRet.Properties.RowNames));
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% 2. Define your initial parameters
+%% 2. Define initial parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 % Start of in-sample calibration period 
@@ -88,72 +88,126 @@ cov_last_Year_yr = cov(lastYearTrainingReturns_yr-1);
 cov_entire_training_mth = cov(trainingReturns_mth);
 cov_last_Year_mth = cov(lastYearTrainingReturns_mth);
 
-no_splits = 100;
+no_splits = 10;
 generated_ret = mvnrnd(mu_entire_training_mth, cov_entire_training_mth, no_splits); % 20 assets = 20 rows; scenarios in columns
 exp_generated_ret = geomean(1+generated_ret,1)-1; % for VSS first term
 
-b = 1000
-G = [500, 900, 1000, 1100, 1200, 1500, 2000, 10000]
+b = 1000;
+%G = [500, 900, 1000, 1100, 1200, 1500, 2000, 10000]
+G = [950, 1000, 1050, 1100, 1200];
 
-%% CALL FUNCTION for Weights
+%% 3. Stochastic Program for varying parmeter
+clear weights weights_mean weights_exp_scenarios fval_actual_scenarios fval_avg_scenarios
+
+
+% Run solver for different G values
 for i = 1:size(G, 2)
+    % Call solver function to optimize weights for Stochastic Program
     [x,fval] = Solver_mat(1+generated_ret, b, G(1,i));
-    fval = -1*fval;
-    [x_expected_scenarios, fval_expected_scenarios] = Solver_mat(exp_generated_ret, b, G(1,i)); %VSS first term
-
+    fval_actual_scenarios(i,:) = -1*(fval);
+    
+    % Extract weights corresponding to each rollout of scenarios
     for j = 1:no_splits
         weights{i,j} = [x((1:NoAssets), 1) x((NoAssets*j+1):(NoAssets*(j+1)), 1)];
     end
-    weights_exp_scenarios{i} = [x_expected_scenarios((1:NoAssets), 1) x_expected_scenarios(((NoAssets+1):NoAssets*2), 1)];
+    
+    % Average of weights from stochastic problem
     weights_mat = cat(3, weights{i,:});
     weights_mean{i} = mean(weights_mat, 3);
     
+    % Determine the weights for expected return = the true sample mean
+    [x_expected_scenarios, fval_expected_scenarios] = Solver_mat(1+exp_generated_ret, b, G(1,i)); %VSS first term
+    weights_avg_scenarios{i} = [x_expected_scenarios((1:NoAssets), 1) x_expected_scenarios(((NoAssets+1):NoAssets*2), 1)];
+    fval_avg_scenarios(i,:) = (fval_expected_scenarios)*-1;
 end
 
 
-%% 
+%% 4. Deterministic Program for t = 0 to t = 1
+
+clear x_optimal_det det_value
+
+% First we find the deterministic problem using expected returns from
+% historical data
+
+% Objective function with surplus reward of 1 and slack penalty of 4
+f = [ones(1,NoAssets) -1 4];
+
+A = [ones(1,NoAssets) 0 0];
+b = 1000;
+Aeq = [(avgMonthlyReturn((end-1), :)+1) -1 1];
+lb = zeros(1, NoAssets+2);
+
 for i = 1:size(G,2)
-    for s = 1:size(no_splits)
-        portfRet{i,s} = diag((1+avgMonthlyReturn(1:2, :))*weights{i,s});
-        
-    end
-%     figures{i} = figure(i)
-    fig1 = figure(i)
+    % Determine optimal x values for varying G
+    beq = G(1,i);
+    [x_optimal_det{i}, det_value{i}] = linprog(f, A, b, Aeq, beq, lb, []);
+end
+
+%% 5. Value of Stochastic Solution
+
+%weights_avg_scenarios
+vss = fval_actual_scenarios-fval_avg_scenarios;
+save('vss.m', 'fval_actual_scenarios','fval_avg_scenarios','vss')
+%% 6. EVIP
+
+EVIP = 
+
+%% 7. Portfolio Weights and Calculation of Portfolio Return for Out-of-Sample Periods
+clear portfRet
+
+for i = 1:size(G,2)
+    fig1 = figure(i);
 
     X = weights_mean{i}(:,1)';
     labels = tickers;
     ax1 = subplot(1,2,1);
     p{(i-1)*2+1} = pie(ax1,X);
-%     p{(i-1)*2+1}.FontSize = 5;
     title(ax1,strcat('G = ', num2str(G(1,i)),'at t = 0'),  'FontSize', 10);
-%     ax1.FontSize = 5;
     
     Y = weights_mean{i}(:,2)';
     ax2 = subplot(1,2,2);
     p{(i-1)*2+2} = pie(ax2,Y);
-%     p{(i-1)*2+2}.FontSize = 5;
     title(ax2,strcat('G = ', num2str(G(1,i)),'at t = 1'), 'FontSize', 10);
-%     ax2.FontSize = 5;
     legend(labels, 'Location', 'best', 'Orientation', 'vertical');
     
     print(fig1,strcat('portfolio_distribution_', num2str(i)),'-dpng','-r0');
-    
-
-%     saveas(figure(1),[pwd '/subFolderName/myFig.fig']);
-    
 end
 
 
 
+%% 8. Visualization of Portfolio Return for each Scenarios for Out-of-Sample Months
+clear legend_text
+counter = 0
+fig2 = figure(2)
+for i = 1:size(G,2)
+    for s = 1:no_splits
+        
+        portfRet{i,s} = diag((1+avgMonthlyReturn((end-1):end, :))*normc(weights{i,s}));
+        plot([ones(1,1); portfRet{i,s}]'*1000)
+        hold on
+        counter = counter + 1
+    end
+end
+% legend(legend_text)
+title('Out-of-Sample: Portfolio Values for all Scenarios Rollouts', 'FontSize', 10);
+ylabel('Portfolio Value','interpreter','latex','FontSize',12);
+xlabel('Period')
+
+print(fig2,'portfolio_value_all_scenarios','-dpng','-r0');
+%% 9. Visualization of Portfolio Return for Averaged Scenarios for Out-of-Sample Months
+
+fig3 = figure()
 portfRet_mat = cat(3, portfRet{:});
 expected_portfRet_across_scenarios = mean(portfRet_mat, 3);
 weights_mean_mat = cat(3, weights_mean{:});
 for i =1:size(G,2)
-    portfRet_testing(i,:) = diag((1+avgMonthlyReturn(1:2,:))*normc(weights_mean{i}))';
+    portfRet_testing(i,:) = diag((1+avgMonthlyReturn((end-1):end,:))*normc(weights_mean{i}))';
 end
-portfValue = weights*testingReturns_weekly';
+% portfValue = weights*testingReturns_weekly';
 
-plot(portfValue);
+plot([ones(size(G,2),1) portfRet_testing]'*1000);
+
+print(fig3,'portfolio_value_avg_scenarios','-dpng','-r0');
 
 % y1[2]- y2[2]- y3[2]- y1[2]+ y2[2]+ y3[2]+ y1[3]- y2[3]- y3[3]- y1[3]+ y2[3]+ y3[3]+ 
 % Aeq = [eye(3) eye(3) -1*eye(3) eye(3) zeros(3, no_var-12); % s = 1 and j = 1 2 3
