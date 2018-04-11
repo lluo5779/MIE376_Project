@@ -169,14 +169,14 @@ for i = 1:size(G,2)
     labels = tickers;
     ax1 = subplot(1,2,1);
     p{(i-1)*2+1} = pie(ax1,X);
-    title(ax1,strcat('G = ', num2str(G(1,i)),'at t = 0'),  'FontSize', 10);
-    legend(labels, 'Location', 'bestoutside', 'Orientation', 'vertical');
+    title(ax1,strcat('G = ', num2str(G(1,i)),'at t = 0'),  'FontSize', 10,'interpreter', 'latex');
+    legend(labels, 'Location', 'northoutside', 'Orientation', 'vertical','interpreter', 'latex');
     
     Y = weights_mean{i}(:,2)';
     ax2 = subplot(1,2,2);
     p{(i-1)*2+2} = pie(ax2,Y);
-    title(ax2,strcat('G = ', num2str(G(1,i)),'at t = 1'), 'FontSize', 10);
-    legend(labels, 'Location', 'bestoutside', 'Orientation', 'vertical');
+    title(ax2,strcat('G = ', num2str(G(1,i)),'at t = 1'), 'FontSize', 10,'interpreter', 'latex');
+    legend(labels, 'Location', 'northoutside', 'Orientation', 'vertical','interpreter', 'latex');
     
     print(fig1,strcat('pi_', num2str(i)),'-dpng','-r0');
 end
@@ -235,10 +235,3 @@ print(fig3,'portfolio_value_avg_scenarios','-dpng','-r0');
 % Aeq = [eye(3) eye(3) -1*eye(3) eye(3) zeros(3, no_var-12); % s = 1 and j = 1 2 3
 %     eye(3) eye(3) zeros(3,6) -1*eye(3) eye(3) zeros(3, no_var-18); % s = 2 and j = 1 2 3
 %     eye(3) eye(3) zeros(3,12) -1*eye(3) eye(3)] % s = 3 and j = 1 2 3
-
-
-
-
-
-
-
