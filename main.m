@@ -88,7 +88,7 @@ cov_last_Year_yr = cov(lastYearTrainingReturns_yr-1);
 cov_entire_training_mth = cov(trainingReturns_mth);
 cov_last_Year_mth = cov(lastYearTrainingReturns_mth);
 
-no_splits = 10;
+no_splits = 50;
 generated_ret = mvnrnd(mu_entire_training_mth, cov_entire_training_mth, no_splits); % 20 assets = 20 rows; scenarios in columns
 exp_generated_ret = geomean(1+generated_ret,1)-1; % for VSS first term
 
@@ -122,6 +122,8 @@ for i = 1:size(G, 2)
 end
 
 
+
+% 'weights{3,1}', 'weights{3,2}', 'weights{3,3}', 'weights{3,4}', 'weights{3,5}'
 %% 4. Deterministic Program for t = 0 to t = 1
 
 clear x_optimal_det det_value
@@ -134,15 +136,20 @@ f = [ones(1,NoAssets) -1 4];
 
 A = [ones(1,NoAssets) 0 0];
 b = 1000;
-Aeq = [(avgMonthlyReturn((end-1), :)+1) -1 1];
+
 lb = zeros(1, NoAssets+2);
 
 for i = 1:size(G,2)
     % Determine optimal x values for varying G
     beq = G(1,i);
-    [x_optimal_det{i}, det_value{i}] = linprog(f, A, b, Aeq, beq, lb, []);
+    Aeq1 = [(avgMonthlyReturn((end-1), :)+1) -1 1];
+    [x_optimal_det{i,1}, det_value{i,1}] = linprog(f, A, b, Aeq1, beq, lb, []);
+    Aeq2 = [(avgMonthlyReturn(end, :)+1) -1 1];
+    [x_optimal_det{i,2}, det_value{i,2}] = linprog(f, A, b, Aeq2, beq, lb, []);
 end
 
+
+save('very_important_table_det.mat', 'x_optimal_det', 'det_value')
 %% 5. Value of Stochastic Solution
 
 %weights_avg_scenarios
@@ -150,7 +157,7 @@ vss = fval_actual_scenarios-fval_avg_scenarios;
 save('vss.m', 'fval_actual_scenarios','fval_avg_scenarios','vss')
 %% 6. EVIP
 
-EVIP = 
+% EVIP = 
 
 %% 7. Portfolio Weights and Calculation of Portfolio Return for Out-of-Sample Periods
 clear portfRet
@@ -163,29 +170,35 @@ for i = 1:size(G,2)
     ax1 = subplot(1,2,1);
     p{(i-1)*2+1} = pie(ax1,X);
     title(ax1,strcat('G = ', num2str(G(1,i)),'at t = 0'),  'FontSize', 10);
+    legend(labels, 'Location', 'bestoutside', 'Orientation', 'vertical');
     
     Y = weights_mean{i}(:,2)';
     ax2 = subplot(1,2,2);
     p{(i-1)*2+2} = pie(ax2,Y);
     title(ax2,strcat('G = ', num2str(G(1,i)),'at t = 1'), 'FontSize', 10);
-    legend(labels, 'Location', 'best', 'Orientation', 'vertical');
+    legend(labels, 'Location', 'bestoutside', 'Orientation', 'vertical');
     
-    print(fig1,strcat('portfolio_distribution_', num2str(i)),'-dpng','-r0');
+    print(fig1,strcat('pi_', num2str(i)),'-dpng','-r0');
 end
-
 
 
 %% 8. Visualization of Portfolio Return for each Scenarios for Out-of-Sample Months
 clear legend_text
-counter = 0
+% counter = 0
 fig2 = figure(2)
+
+mon_ret_for_testing = (1+avgMonthlyReturn((end-1):end,:))
 for i = 1:size(G,2)
+    
     for s = 1:no_splits
-        
-        portfRet{i,s} = diag((1+avgMonthlyReturn((end-1):end, :))*normc(weights{i,s}));
-        plot([ones(1,1); portfRet{i,s}]'*1000)
-        hold on
-        counter = counter + 1
+        if mod(s,2)==1
+            t1_ret = mon_ret_for_testing(1,:)*weights{i,s}(:,1)/sum(weights{i,s}(:,1));
+            t2_ret = mon_ret_for_testing(2,:)*weights{i,s}(:,2)/sum(weights{i,s}(:,2))*t1_ret;
+            portfRet{i,s} = [t1_ret;t2_ret];
+            plot([ones(1,1); portfRet{i,s}]'*1000)
+            hold on
+        end
+%         counter = counter + 1
     end
 end
 % legend(legend_text)
@@ -201,11 +214,20 @@ portfRet_mat = cat(3, portfRet{:});
 expected_portfRet_across_scenarios = mean(portfRet_mat, 3);
 weights_mean_mat = cat(3, weights_mean{:});
 for i =1:size(G,2)
-    portfRet_testing(i,:) = diag((1+avgMonthlyReturn((end-1):end,:))*normc(weights_mean{i}))';
+    t_ret = (1+avgMonthlyReturn((end-1):end,:))
+    portfRet_testing(i,1) = (1+avgMonthlyReturn((end-1),:))*(weights_mean{i}(:,1)/sum(weights_mean{i}(:,1)));
+    portfRet_testing(i,2) = portfRet_testing(i,1)*(1+avgMonthlyReturn((end),:))*(weights_mean{i}(:,2)/sum(weights_mean{i}(:,2)));
+    portfRet_testing_det(i,1) = t_ret(1,:)*(x_optimal_det{i,1}(1:NoAssets)/sum(x_optimal_det{i}(1:NoAssets)));
+    portfRet_testing_det(i,2) = portfRet_testing_det(i,1)*t_ret(2,:)*(x_optimal_det{i,2}(1:NoAssets)/sum(x_optimal_det{i}(1:NoAssets)));
+    
 end
 % portfValue = weights*testingReturns_weekly';
 
 plot([ones(size(G,2),1) portfRet_testing]'*1000);
+hold on
+plot([ones(size(G,2),1) portfRet_testing_det]'*1000, '--');
+
+ylabel('Portfolio Value','interpreter','latex','FontSize',12);
 
 print(fig3,'portfolio_value_avg_scenarios','-dpng','-r0');
 
